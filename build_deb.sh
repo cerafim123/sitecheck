@@ -38,6 +38,7 @@ rm -rf "$ROOT"
 mkdir -p "$ROOT"
 
 DESTDIR="$PWD/$ROOT" cmake --install build/release --strip
+gzip -9n "$ROOT/usr/share/man/man1/sitecheck.1"
 
 if [ -e debian/control ]; then
     echo "debian/control уже существует; остановка, чтобы не перезаписать его" >&2
@@ -67,6 +68,7 @@ sed \
 
 install -m 0644 packaging/DEBIAN/conffiles "$ROOT/DEBIAN/conffiles"
 install -m 0644 packaging/copyright "$ROOT/usr/share/doc/$NAME/copyright"
+install -m 0644 LICENSE "$ROOT/usr/share/doc/$NAME/LICENSE"
 gzip -9n -c packaging/changelog \
     > "$ROOT/usr/share/doc/$NAME/changelog.gz"
 
