@@ -1,3 +1,9 @@
+sitecheck (0.2.0) unstable; urgency=medium
+
+  * Added CI pipeline, sanitizer tests, and coverage checks.
+
+ -- cerafim123 <nicitauzhakin@yandex.ru>  Tue, 24 Nov 2026 15:17:49 +0000
+
 sitecheck (0.1.0) unstable; urgency=medium
 
   * Initial release for variant 8.
