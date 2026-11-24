@@ -27,3 +27,7 @@ install(TARGETS sitecheck RUNTIME DESTINATION bin)
 install(FILES packaging/sitecheck.conf
     DESTINATION /etc/sitecheck
 )
+
+install(FILES packaging/man/sitecheck.1
+    DESTINATION share/man/man1
+)
