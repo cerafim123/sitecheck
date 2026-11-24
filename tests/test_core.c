@@ -126,8 +126,18 @@ static void test_summary_empty_and_null(void)
     CHECK(summary.failed == 4);
 }
 
+
+static void demo_intentional_memory_leak(void)
+{
+    int *leaked = malloc(sizeof *leaked);
+    if (leaked != NULL) {
+        *leaked = 42;
+    }
+}
+
 int main(void)
 {
+    demo_intentional_memory_leak();
     test_saved_200_fixture();
     test_saved_404_fixture();
     test_status_boundaries();
