@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 file(STRINGS "${CMAKE_SOURCE_DIR}/VERSION" APP_VERSION LIMIT_COUNT 1)
 project(sitecheck VERSION "${APP_VERSION}" LANGUAGES C)
+include(CTest)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -22,3 +23,7 @@ target_compile_definitions(sitecheck PRIVATE
 target_link_libraries(sitecheck PRIVATE sitecore)
 
 install(TARGETS sitecheck RUNTIME DESTINATION bin)
+
+install(FILES packaging/sitecheck.conf
+    DESTINATION /etc/sitecheck
+)

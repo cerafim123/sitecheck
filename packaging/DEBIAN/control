@@ -1,0 +1,9 @@
+Package: sitecheck
+Version: @VERSION@
+Section: net
+Priority: optional
+Architecture: @ARCH@
+Depends: @DEPENDS@
+Maintainer: @MAINTAINER@
+Description: HTTP website availability checker
+ Checks HTTP response codes and response times for websites.
