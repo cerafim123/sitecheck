@@ -1,0 +1,6 @@
+build-essential
+cmake
+pkgconf
+dpkg-dev
+lintian
+libcurl4-openssl-dev

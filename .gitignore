@@ -1,0 +1,14 @@
+build/
+dist/
+debian/
+*.o
+*.a
+*.so
+*.deb
+*.gcda
+*.gcno
+*.gcov
+.cache/
+.idea/
+.vscode/
+.DS_Store
