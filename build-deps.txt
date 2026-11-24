@@ -4,3 +4,4 @@ pkgconf
 dpkg-dev
 lintian
 libcurl4-openssl-dev
+libmicrohttpd-dev

@@ -237,7 +237,8 @@ static int run_probe_command(int argc, char *argv[], int show_details)
         char error[256] = {0};
         char url[SITECHECK_URL_MAX];
 
-        (void)snprintf(url, sizeof(url), "%s", results[site].url);
+        memcpy(url, results[site].url, sizeof(url));
+        url[sizeof(url) - 1] = '\0';
 
         if (strncmp(url, "http://", 7) != 0 &&
             strncmp(url, "https://", 8) != 0) {

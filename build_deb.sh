@@ -55,7 +55,7 @@ mkdir -p debian
 trap 'rm -f debian/control; rmdir debian 2>/dev/null || true' EXIT HUP INT TERM
 : > debian/control
 
-DEPENDS="$(dpkg-shlibdeps -O -e"$ROOT/usr/bin/$NAME" |
+DEPENDS="$(dpkg-shlibdeps -O -e"$ROOT/usr/bin/$NAME" -e"$ROOT/usr/bin/sitecheck-server" |
     sed -n 's/^shlibs:Depends=//p')"
 
 if [ -z "$DEPENDS" ]; then
