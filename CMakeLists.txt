@@ -31,3 +31,20 @@ install(FILES packaging/sitecheck.conf
 install(FILES packaging/man/sitecheck.1
     DESTINATION share/man/man1
 )
+
+if(BUILD_TESTING)
+    add_executable(test_core tests/test_core.c)
+    target_link_libraries(test_core PRIVATE sitecore)
+    target_compile_definitions(test_core PRIVATE
+        TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/data"
+    )
+    add_test(NAME core COMMAND test_core)
+
+    add_test(NAME cli_version COMMAND sitecheck --version)
+    set_tests_properties(cli_version PROPERTIES
+        PASS_REGULAR_EXPRESSION "${PROJECT_VERSION}"
+    )
+
+    add_test(NAME cli_bad_args COMMAND sitecheck --no-such-option)
+    set_tests_properties(cli_bad_args PROPERTIES WILL_FAIL TRUE)
+endif()
