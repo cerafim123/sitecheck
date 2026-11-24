@@ -14,13 +14,13 @@ find_package(CURL REQUIRED)
 
 add_library(sitecore STATIC src/core.c)
 target_include_directories(sitecore PUBLIC "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(sitecore PUBLIC CURL::libcurl)
+
 
 add_executable(sitecheck src/main.c)
 target_compile_definitions(sitecheck PRIVATE
     APP_VERSION="${PROJECT_VERSION}"
 )
-target_link_libraries(sitecheck PRIVATE sitecore)
+target_link_libraries(sitecheck PRIVATE sitecore CURL::libcurl)
 
 install(TARGETS sitecheck RUNTIME DESTINATION bin)
 

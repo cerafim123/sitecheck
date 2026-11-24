@@ -1,5 +1,7 @@
 #include "core.h"
 
+#include <curl/curl.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,17 +15,38 @@
 #define DEFAULT_TIMEOUT_MS 5000L
 #define MAX_TIMEOUT_MS 300000L
 
-static void print_help(const char *program)
+typedef struct {
+    char status_line[256];
+    size_t status_length;
+} HeaderCapture;
+
+static void set_error(char error[], size_t error_size,
+                      const char message[])
 {
-    printf("Использование:\n");
-    printf("  %s --help\n", program);
-    printf("  %s --version\n", program);
-    printf("  %s check [--timeout-ms MS] URL [URL ...]\n", program);
-    printf("  %s summary [--timeout-ms MS] URL [URL ...]\n", program);
-    printf("\n"
-           "check   — проверить адреса и показать результат каждого запроса;\n"
-           "summary — проверить адреса и вывести итоговую сводку;\n"
-           "MS      — время ожидания в миллисекундах (1–300000).\n");
+    if (error != NULL && error_size > 0) {
+        (void)snprintf(error, error_size, "%s", message);
+    }
+}
+
+static size_t capture_status_line(char data[], size_t size, size_t count,
+                                  void *user_data)
+{
+    HeaderCapture *capture = user_data;
+    size_t length = size * count;
+
+    if (capture != NULL && length >= 5 && memcmp(data, "HTTP/", 5) == 0) {
+        size_t copy_length = length;
+
+        if (copy_length >= sizeof(capture->status_line)) {
+            copy_length = sizeof(capture->status_line) - 1;
+        }
+
+        memcpy(capture->status_line, data,copy_length);
+        capture->status_line[copy_length] = '\0';
+        capture->status_length = copy_length;
+    }
+
+    return length;
 }
 
 static long read_default_timeout(void)
@@ -32,7 +55,6 @@ static long read_default_timeout(void)
     char line[256];
     long timeout_ms = DEFAULT_TIMEOUT_MS;
 
-    /* Отсутствие конфигурационного файла не является ошибкой. */
     if (file == NULL) {
         return timeout_ms;
     }
@@ -51,7 +73,7 @@ static long read_default_timeout(void)
     return timeout_ms;
 }
 
-static int parse_timeout(const char *text, long *timeout_ms)
+static int parse_timeout(const char text[], long *timeout_ms)
 {
     char *end = NULL;
     long value;
@@ -72,15 +94,100 @@ static int parse_timeout(const char *text, long *timeout_ms)
     return 0;
 }
 
+/* Сетевой ввод-вывод находится в main, не в библиотеке core. */
+static int probe_url(const char url[], long timeout_ms, SiteResult *result,
+                     char error[], size_t error_size)
+{
+    CURL *handle;
+    CURLcode code;
+    double elapsed_seconds = 0.0;
+    HeaderCapture capture = {{0}, 0};
+
+    memset(result, 0, sizeof(*result));
+    (void)snprintf(result->url, sizeof(result->url), "%s", url);
+
+    handle = curl_easy_init();
+    if (handle == NULL) {
+        set_error(error, error_size, "Не удалось создать запрос libcurl");
+        return -1;
+    }
+
+    code = curl_easy_setopt(handle, CURLOPT_URL, url);
+    if (code == CURLE_OK) {
+        code = curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1L);
+    }
+    if (code == CURLE_OK) {
+        code = curl_easy_setopt(handle, CURLOPT_MAXREDIRS, 5L);
+    }
+    if (code == CURLE_OK) {
+        code = curl_easy_setopt(handle, CURLOPT_NOSIGNAL, 1L);
+    }
+    if (code == CURLE_OK) {
+        code = curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, timeout_ms);
+    }
+    if (code == CURLE_OK) {
+        code = curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT_MS, timeout_ms);
+    }
+    if (code == CURLE_OK) {
+        code = curl_easy_setopt(handle, CURLOPT_USERAGENT,
+                                "sitecheck/" APP_VERSION);
+    }
+    if (code == CURLE_OK) {
+        code = curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION,
+                                capture_status_line);
+    }
+    if (code == CURLE_OK) {
+        code = curl_easy_setopt(handle, CURLOPT_HEADERDATA, &capture);
+    }
+
+    if (code == CURLE_OK) {
+        code = curl_easy_perform(handle);
+    }
+
+    if (code != CURLE_OK) {
+        set_error(error, error_size, curl_easy_strerror(code));
+        curl_easy_cleanup(handle);
+        return -1;
+    }
+
+    code = curl_easy_getinfo(handle, CURLINFO_TOTAL_TIME, &elapsed_seconds);
+    if (code != CURLE_OK) {
+        set_error(error, error_size, curl_easy_strerror(code));
+        curl_easy_cleanup(handle);
+        return -1;
+    }
+
+    if (sitecheck_parse_response(capture.status_line, capture.status_length,
+                                 &result->http_code) != 0) {
+        set_error(error, error_size, "Не удалось разобрать HTTP-ответ");
+        curl_easy_cleanup(handle);
+        return -1;
+    }
+
+    result->elapsed_seconds = elapsed_seconds;
+    result->request_ok = 1;
+    curl_easy_cleanup(handle);
+    return 0;
+}
+
+static void print_help(const char program[])
+{
+    printf("Использование:\n");
+    printf("  %s --help\n", program);
+    printf("  %s --version\n", program);
+    printf("  %s check [--timeout-ms MS] URL [URL ...]\n", program);
+    printf("  %s summary [--timeout-ms MS] URL [URL ...]\n", program);
+}
+
 static void print_summary(const SiteSummary *summary)
 {
     printf("Всего сайтов: %zu\n", summary->total);
     printf("Получен HTTP-ответ: %zu\n", summary->reachable);
     printf("Ошибок запроса: %zu\n", summary->failed);
-    printf("Среднее время ответа: %.3f с\n", summary->average_seconds);
+    printf("Среднеевремя ответа: %.3f с\n", summary->average_seconds);
 }
 
-static int run_probe_command(int argc, char **argv, int show_details)
+static int run_probe_command(int argc, char *argv[], int show_details)
 {
     SiteResult results[MAX_SITES];
     SiteSummary summary;
@@ -94,7 +201,7 @@ static int run_probe_command(int argc, char **argv, int show_details)
             if (index + 1 >= argc ||
                 parse_timeout(argv[index + 1], &timeout_ms) != 0) {
                 fprintf(stderr,
-                        "Ошибка: --timeout-ms требует целое число от 1 до %ld\n",
+                        "Ошибка: --timeout-ms требует число от 1 до %ld\n",
                         MAX_TIMEOUT_MS);
                 return 2;
             }
@@ -107,14 +214,10 @@ static int run_probe_command(int argc, char **argv, int show_details)
             return 2;
         }
 
-        if (count >= MAX_SITES) {
-            fprintf(stderr, "Ошибка: можно проверить не более %d сайтов\n",
-                    MAX_SITES);
-            return 2;
-        }
-
-        if (strlen(argv[index]) >= sizeof(results[count].url)) {
-            fprintf(stderr, "Ошибка: адрес слишком длинный\n");
+        if (count >= MAX_SITES ||
+            strlen(argv[index]) >= sizeof(results[count].url)) {
+            fprintf(stderr,
+                    "Ошибка: слишком много адресов или адрес слишком длинный\n");
             return 2;
         }
 
@@ -131,38 +234,42 @@ static int run_probe_command(int argc, char **argv, int show_details)
 
     for (size_t site = 0; site < count; site++) {
         char error[256] = {0};
-        int probe_status = sitecheck_probe(
-            results[site].url,
-            timeout_ms,
-            &results[site],
-            error,
-            sizeof(error));
+        char url[SITECHECK_URL_MAX];
 
-        if (probe_status != 0) {
+        (void)snprintf(url, sizeof(url), "%s", results[site].url);
+
+        if (strncmp(url, "http://", 7) != 0 &&
+            strncmp(url, "https://", 8) != 0) {
+            set_error(error, sizeof(error),
+                      "Адрес должен начинаться с http:// или https://");
+            fprintf(stderr, "%s: %s\n", url, error);
             failed++;
-            fprintf(stderr, "%s: %s\n", results[site].url,
-                    error[0] != '\0' ? error : "ошибказапроса");
+            continue;
+        }
+
+        if (probe_url(url, timeout_ms, &results[site],
+                      error, sizeof(error)) != 0) {
+            fprintf(stderr, "%s: %s\n", url, error);
+            failed++;
         }
 
         if (show_details) {
             printf("%-48s HTTP %ld  %.3f с\n",
-                   results[site].url,
+                   url,
                    results[site].http_code,
                    results[site].elapsed_seconds);
         }
     }
 
     sitecheck_summarize(results, count, &summary);
-
     if (show_details) {
         putchar('\n');
     }
     print_summary(&summary);
-
     return failed == 0 ? 0 : 1;
 }
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
     int result;
 
@@ -189,14 +296,12 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    if (sitecheck_init() != 0) {
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
         fprintf(stderr, "Ошибка: не удалось инициализировать libcurl\n");
         return 2;
     }
 
-    result = run_probe_command(
-        argc, argv, strcmp(argv[1], "check") == 0);
-
-    sitecheck_cleanup();
+    result = run_probe_command(argc, argv, strcmp(argv[1], "check") == 0);
+    curl_global_cleanup();
     return result;
 }
