@@ -28,6 +28,7 @@ static void set_error(char error[], size_t error_size,
     }
 }
 
+// cppcheck-suppress constParameterCallback
 static size_t capture_status_line(char data[], size_t size, size_t count,
                                   void *user_data)
 {

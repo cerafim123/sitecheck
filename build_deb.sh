@@ -4,6 +4,12 @@ umask 022
 
 NAME=sitecheck
 VERSION="$(cat VERSION)"
+
+if [ "${GITHUB_REF_TYPE:-}" = "tag" ] &&
+   [ "${GITHUB_REF_NAME:-}" != "v$VERSION" ]; then
+    echo "Тег ${GITHUB_REF_NAME:-} не совпадает с версией v$VERSION" >&2
+    exit 1
+fi
 ARCH="$(dpkg --print-architecture)"
 ROOT="build/pkg/${NAME}_${VERSION}_${ARCH}"
 
