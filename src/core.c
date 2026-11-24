@@ -39,6 +39,7 @@ int sitecheck_probe(const char *url, long timeout_ms, SiteResult *result,
     long http_code = 0;
     double elapsed_seconds = 0.0;
     size_t url_length;
+    char url_copy[SITECHECK_URL_MAX];
 
     if (url == NULL || result == NULL || timeout_ms <= 0) {
         set_error(error, error_size, "Некорректные аргументы проверки");
@@ -57,9 +58,9 @@ int sitecheck_probe(const char *url, long timeout_ms, SiteResult *result,
                   "Адрес должен начинаться с http:// или https://");
         return -1;
     }
-
+    (void)memcpy(url_copy, url, url_length+1);
     (void)memset(result, 0, sizeof(*result));
-    (void)snprintf(result->url, sizeof(result->url), "%s", url);
+    (void)snprintf(result->url, sizeof(result->url), "%s", url_copy);
 
     handle = curl_easy_init();
     if (handle == NULL) {
@@ -67,7 +68,7 @@ int sitecheck_probe(const char *url, long timeout_ms, SiteResult *result,
         return -1;
     }
 
-    code = curl_easy_setopt(handle, CURLOPT_URL, url);
+    code = curl_easy_setopt(handle, CURLOPT_URL, url_copy);
     if (code == CURLE_OK) {
         code = curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1L);
     }
