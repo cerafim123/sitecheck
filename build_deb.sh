@@ -13,8 +13,8 @@ fi
 ARCH="$(dpkg --print-architecture)"
 ROOT="build/pkg/${NAME}_${VERSION}_${ARCH}"
 
-MAINTAINER_NAME="$(git config user.name || true)"
-MAINTAINER_EMAIL="$(git config user.email || true)"
+MAINTAINER_NAME="${DEBFULLNAME:-$(git config user.name || true)}"
+MAINTAINER_EMAIL="${DEBEMAIL:-$(git config user.email || true)}"
 
 if [ -z "$MAINTAINER_NAME" ] || [ -z "$MAINTAINER_EMAIL" ]; then
     echo "Сначала настройте git config user.name и user.email" >&2
