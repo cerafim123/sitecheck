@@ -6,3 +6,4 @@ lintian
 libcurl4-openssl-dev
 libmicrohttpd-dev
 cppcheck
+gcovr
