@@ -24,7 +24,7 @@ spec:
         runAsUser: 10001
       containers:
         - name: sitecheck
-          image: cerafim125/sitecheck:1.0.0
+          image: cerafim125/sitecheck:1.0.1
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
