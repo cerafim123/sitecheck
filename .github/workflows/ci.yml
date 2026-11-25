@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && xargs -a build-deps.txt sudo apt-get install -y cppcheck
+      - run: sudo apt-get update && xargs -a build-deps.txt sudo apt-get install -y
       - run: cmake -S . -B build -DCMAKE_C_FLAGS=-Werror -DBUILD_TESTING=OFF
       - run: cmake --build build
       - run: |
@@ -32,7 +32,7 @@ jobs:
             -DCMAKE_C_FLAGS="--coverage -fsanitize=address,undefined" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage -fsanitize=address,undefined"
       - run: cmake --build build
-      - run: ctest --test-dir build --output-on-failure --output-junit junit.xml
+      - run: ctest --test-dir build --output-on-failure --output-junit build/junit.xml
       - run: gcovr --root . --filter src/core --fail-under-line 70 build
       - uses: actions/upload-artifact@v4
         if: always()
