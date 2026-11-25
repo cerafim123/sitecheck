@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include <microhttpd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,7 +77,7 @@ static enum MHD_Result handle_check(struct MHD_Connection *conn,
     return send_json(conn, MHD_HTTP_OK, json);
 }
 
-static enum MHD_Result request_handler(void @id335025344 (*closure),
+static enum MHD_Result request_handler(void *closure,
                                        struct MHD_Connection *conn,
                                        const char *url,
                                        const char *method,
@@ -125,7 +126,8 @@ int main(void) {
         MHD_USE_INTERNAL_POLLING_THREAD,
         (uint16_t)port,
         NULL, NULL,
-        &request_handler, NULL,MHD_OPTION_END);
+        &request_handler, NULL,
+        MHD_OPTION_END);
 
     if (!daemon) {
         fprintf(stderr, "Failed to start HTTP daemon on port %d\n", port);
