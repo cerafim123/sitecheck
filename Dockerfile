@@ -3,7 +3,7 @@ FROM ubuntu:24.04
 COPY dist/sitecheck_*.deb /tmp/sitecheck.deb
 
 RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates \
       /tmp/sitecheck.deb curl \
  && rm -rf /var/lib/apt/lists/* /tmp/sitecheck.deb
 
