@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && xargs -a build-deps.txt sudo apt-get install -y cppcheck
+      - run: sudo apt-get update && xargs -a build-deps.txt sudo apt-get install -y
       - run: cmake -S . -B build -DCMAKE_C_FLAGS=-Werror -DBUILD_TESTING=OFF
       - run: cmake --build build
       - run: |
@@ -32,7 +32,7 @@ jobs:
             -DCMAKE_C_FLAGS="--coverage -fsanitize=address,undefined" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage -fsanitize=address,undefined"
       - run: cmake --build build
-      - run: ctest --test-dir build --output-on-failure --output-junit junit.xml
+      - run: ctest --test-dir build --output-on-failure --output-junit build/junit.xml
       - run: gcovr --root . --filter src/core --fail-under-line 70 build
       - uses: actions/upload-artifact@v4
         if: always()
@@ -59,34 +59,83 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Read version
-        id: ver
+      - uses: actions/download-artifact@v4
+        with:
+          name: deb
+          path: dist
+
+      - name: Check tag and set image tags
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          VERSION=$(cat VERSION)
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+          VERSION="$(cat VERSION)"
+          test "$GITHUB_REF_NAME" = "v$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          echo "IMAGE=${DOCKERHUB_USERNAME}/sitecheck" >> "$GITHUB_ENV"
+
+      - name: Build image
+        run: |
+          docker build \
+            -t "$IMAGE:$VERSION" \
+            -t "$IMAGE:$SHORT_SHA" .
+
+      - name: Smoke test before publishing
+        env:
+          APP_API_TOKEN: ci
+        run: |
+          docker run -d --name sitecheck-smoke \
+            -p 18080:8080 \
+            -e APP_PORT=8080 \
+            -e APP_API_TOKEN="$APP_API_TOKEN" \
+            "$IMAGE:$VERSION"
+
+          ready=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/health >/dev/null; then
+              ready=1
+              break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' sitecheck-smoke)" != "true" ]; then
+              docker logs sitecheck-smoke
+              exit 1
+            fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+
+          curl -fsS http://127.0.0.1:18080/ready
+
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -X POST \
+            --data-binary 'http://127.0.0.1:8080/health' \
+            http://127.0.0.1:18080/api/check)
+          test "$code" = "401"
+
+          curl -fsS -X POST \
+            -H "X-Api-Token: $APP_API_TOKEN" \
+            --data-binary 'http://127.0.0.1:8080/health' \
+            http://127.0.0.1:18080/api/check
+
+          docker image inspect \
+            --format='Image size: {{.Size}} bytes' "$IMAGE:$VERSION"
+
+      - name: Remove smoke-test container
+        if: always()
+        run: docker rm -f sitecheck-smoke || true
+
+      - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build image
+
+      - name: Push image tags
         run: |
-          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/sitecheck"
-          VERSION="${{ steps.ver.outputs.version }}"
-          SHORT_SHA="${{ steps.ver.outputs.short_sha }}"
-          docker build -t "$IMAGE:$VERSION" -t "$IMAGE:$SHORT_SHA" .
-      - name: Push image
-        run: |
-          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/sitecheck"
-          VERSION="${{ steps.ver.outputs.version }}"
-          SHORT_SHA="${{ steps.ver.outputs.short_sha }}"
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:$SHORT_SHA"
 
   release:
-    needs: deploy
+    needs: [package, deploy]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:
