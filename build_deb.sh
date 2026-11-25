@@ -75,7 +75,7 @@ gzip -9n -c packaging/changelog \
 
 find "$ROOT" -type d -exec chmod 0755 {} +
 find "$ROOT" -type f -exec chmod 0644 {} +
-chmod 0755 "$ROOT/usr/bin/$NAME"
+chmod 0755 "$ROOT/usr/bin/$NAME" "$ROOT/usr/bin/sitecheck-server"
 
 dpkg-deb --root-owner-group --build \
     "$ROOT" "dist/${NAME}_${VERSION}_${ARCH}.deb"
