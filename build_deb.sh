@@ -13,13 +13,8 @@ fi
 ARCH="$(dpkg --print-architecture)"
 ROOT="build/pkg/${NAME}_${VERSION}_${ARCH}"
 
-MAINTAINER_NAME="${DEBFULLNAME:-$(git config user.name || true)}"
-MAINTAINER_EMAIL="${DEBEMAIL:-$(git config user.email || true)}"
-
-if [ -z "$MAINTAINER_NAME" ] || [ -z "$MAINTAINER_EMAIL" ]; then
-    echo "Сначала настройте git config user.name и user.email" >&2
-    exit 1
-fi
+MAINTAINER_NAME="${DEBFULLNAME:-cerafim123}"
+MAINTAINER_EMAIL="${DEBEMAIL:-113587774+cerafim123@users.noreply.github.com}"
 
 escape_sed() {
     printf '%s' "$1" | sed 's/[\/&]/\\&/g'
