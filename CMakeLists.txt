@@ -11,18 +11,29 @@ set(CMAKE_C_EXTENSIONS OFF)
 add_compile_options(-Wall -Wextra -Wpedantic)
 
 find_package(CURL REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MICROHTTPD REQUIRED IMPORTED_TARGET libmicrohttpd)
 
 add_library(sitecore STATIC src/core.c)
 target_include_directories(sitecore PUBLIC "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(sitecore PUBLIC CURL::libcurl)
 
 
 add_executable(sitecheck src/main.c)
 target_compile_definitions(sitecheck PRIVATE
     APP_VERSION="${PROJECT_VERSION}"
 )
-target_link_libraries(sitecheck PRIVATE sitecore CURL::libcurl)
+target_link_libraries(sitecheck PRIVATE sitecore)
 
-install(TARGETS sitecheck RUNTIME DESTINATION bin)
+add_executable(sitecheck-server src/server.c)
+target_compile_definitions(sitecheck-server PRIVATE
+    APP_VERSION="${PROJECT_VERSION}"
+)
+target_link_libraries(sitecheck-server PRIVATE
+    sitecore PkgConfig::MICROHTTPD
+)
+
+install(TARGETS sitecheck sitecheck-server RUNTIME DESTINATION bin)
 
 install(FILES packaging/sitecheck.conf
     DESTINATION /etc/sitecheck
