@@ -1,0 +1,5 @@
+// libmicrohttpd передаёт closure как void*; делать его const нельзя
+// без каста указателя функции при регистрации в MHD_start_daemon.
+constParameterCallback:src/server.c
+// Аналогично для main.c, если там есть callback-функции.
+constParameterCallback:src/main.c

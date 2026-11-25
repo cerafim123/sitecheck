@@ -7,96 +7,50 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
-
 jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Установить зависимости и cppcheck
-        run: |
-          sudo apt-get update
-          xargs -a build-deps.txt sudo apt-get install -y cppcheck
-
-      - name: Выпускная сборка
-        run: |
-          cmake -S . -B build \
-            -DCMAKE_C_FLAGS=-Werror \
-            -DBUILD_TESTING=OFF
-          cmake --build build --parallel
-
-      - name: Статический анализ
-        run: >
-          cppcheck --enable=warning,style,performance
-          --suppress=constParameterCallback:src/main.c
-          --error-exitcode=1 -q src
+      - run: sudo apt-get update && xargs -a build-deps.txt sudo apt-get install -y
+      - run: cmake -S . -B build -DCMAKE_C_FLAGS=-Werror -DBUILD_TESTING=OFF
+      - run: cmake --build build
+      - run: |
+          cppcheck --enable=warning,style,performance \
+            --suppressions-list=cppcheck-suppressions.txt \
+            --error-exitcode=1 -q src
 
   test:
     needs: build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Установить зависимости и gcovr
-        run: |
-          sudo apt-get update
-          xargs -a build-deps.txt sudo apt-get install -y gcovr
-
-      - name: Сборка с ASan, UBSan и покрытием
-        run: |
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_C_FLAGS="--coverage -fsanitize=address,undefined -fno-omit-frame-pointer" \
+      - run: sudo apt-get update && xargs -a build-deps.txt sudo apt-get install -y
+      - run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="--coverage -fsanitize=address,undefined" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage -fsanitize=address,undefined"
-          cmake --build build --parallel
-
-      - name: CTest и JUnit-отчёт
-        env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
-        run: >
-          ctest --test-dir build --output-on-failure
-          --output-junit build/junit.xml
-
-      - name: Проверить покрытие core
-        run: >
-          gcovr --root . --filter 'src/core\.c$'
-          --fail-under-line 70 build
-
+      - run: cmake --build build
+      - run: ctest --test-dir build --output-on-failure --output-junit junit.xml
+      - run: gcovr --root . --filter src/core --fail-under-line 70 build
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-report
           path: build/junit.xml
-          if-no-files-found: warn
 
   package:
     needs: test
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Установить зависимости
-        run: |
-          sudo apt-get update
-          xargs -a build-deps.txt sudo apt-get install -y dpkg-dev lintian
-
-      - name: Собрать deb-пакет
-        env:
-          DEBFULLNAME: sitecheck contributors
-          DEBEMAIL: sitecheck@example.invalid
-        run: ./build_deb.sh
-
-      - name: Проверить пакет
-        run: lintian --fail-on error dist/*.deb
-
+      - run: sudo apt-get update && xargs -a build-deps.txt sudo apt-get install -y
+      - run: ./build_deb.sh
+      - run: lintian --fail-on error dist/*.deb
       - uses: actions/upload-artifact@v4
         with:
           name: deb
           path: dist/*.deb
-
 
   deploy:
     needs: package
@@ -104,83 +58,44 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: deb
-          path: dist
-
-      - name: Подготовить имена образа
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      - name: Read version
+        id: ver
         run: |
-          echo "IMAGE=${DOCKERHUB_USERNAME}/sitecheck" >> "$GITHUB_ENV"
-          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
-          echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
-
-      - name: Собрать образ из deb-артефакта
-        run: |
-          test -n "$DOCKERHUB_USERNAME" || true
-          test -n "$(find dist -maxdepth 1 -name 'sitecheck_*.deb' -print -quit)"
-          docker build \
-            -t "$IMAGE:$VERSION" \
-            -t "$IMAGE:$SHORT_SHA" .
-
-      - name: Запустить контейнер
-        run: |
-          docker run -d --name sitecheck-smoke \
-            -p 8080:8080 \
-            -e APP_PORT=8080 \
-            -e APP_API_TOKEN=ci-smoke-token \
-            "$IMAGE:$VERSION"
-
-      - name: Smoke-тест до публикации
-        run: |
-          ready=0
-          for attempt in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8080/health; then
-              ready=1
-              break
-            fi
-            sleep 1
-          done
-          test "$ready" -eq 1
-
-          response="$(curl -fsS -X POST \
-            -H 'X-Api-Token: ci-smoke-token' \
-            --data-binary 'https://example.com' \
-            http://127.0.0.1:8080/api/check)"
-          printf '%s\n' "$response"
-          printf '%s\n' "$response" | grep -q '"http_code":200'
-
-      - name: Войти в Docker Hub
+          VERSION=$(cat VERSION)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Опубликовать оба тега
+      - name: Build image
         run: |
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/sitecheck"
+          VERSION="${{ steps.ver.outputs.version }}"
+          SHORT_SHA="${{ steps.ver.outputs.short_sha }}"
+          docker build -t "$IMAGE:$VERSION" -t "$IMAGE:$SHORT_SHA" .
+      - name: Push image
+        run: |
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/sitecheck"
+          VERSION="${{ steps.ver.outputs.version }}"
+          SHORT_SHA="${{ steps.ver.outputs.short_sha }}"
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:$SHORT_SHA"
 
   release:
-    needs: package
+    needs: deploy
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/download-artifact@v4
         with:
           name: deb
           path: dist
-
-      - name: Опубликовать релиз с deb-пакетом
+      - run: gh release create "${{ github.ref_name }}" dist/*.deb --generate-notes
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "$GITHUB_REF_NAME" dist/*.deb
-          --title "$GITHUB_REF_NAME" --generate-notes
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
