@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
         file = argv[optind];
     }
 
-    char *file_urls[MAX_URLS];
+    char *file_urls[MAX_URLS] = {0};
     size_t file_url_count = 0;
 
     if (file) {

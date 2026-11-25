@@ -12,12 +12,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && xargs -a build-deps.txt sudo apt-get install -y
+      - run: sudo apt-get update && xargs -a build-deps.txt sudo apt-get install -y cppcheck
       - run: cmake -S . -B build -DCMAKE_C_FLAGS=-Werror -DBUILD_TESTING=OFF
       - run: cmake --build build
       - run: |
           cppcheck --enable=warning,style,performance \
-            --suppressions-list=cppcheck-suppressions.txt \
+            --suppress=constParameterCallback:src/main.c \
+            --suppress=constParameterCallback:src/server.c \
             --error-exitcode=1 -q src
 
   test:
