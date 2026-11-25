@@ -77,10 +77,10 @@ jobs:
         env:
           APP_API_TOKEN: ci
         run: |
-          docker run -d --name sitecheck-smoke \\
-            -p 18080:8080 \\
-            -e APP_PORT=8080 \\
-            -e APP_API_TOKEN="$APP_API_TOKEN" \\
+          docker run -d --name sitecheck-smoke \
+            -p 18080:8080 \
+            -e APP_PORT=8080 \
+            -e APP_API_TOKEN="$APP_API_TOKEN" \
             "$IMAGE:$VERSION"
 
           ready=0
@@ -98,16 +98,16 @@ jobs:
 
           curl -fsS http://127.0.0.1:18080/ready
 
-          code=$(curl -sS -o /dev/null -w '%{http_code}' \\
-            -X POST \\
-            --data-binary 'http://127.0.0.1:1/health' \\
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -X POST \
+            --data-binary 'http://127.0.0.1:1/health' \
             http://127.0.0.1:18080/api/check)
           test "$code" = "401"
 
-          code=$(curl -sS -o /tmp/api-response.json -w '%{http_code}' \\
-            -X POST \\
-            -H "X-Api-Token: $APP_API_TOKEN" \\
-            --data-binary 'http://127.0.0.1:1/health' \\
+          code=$(curl -sS -o /tmp/api-response.json -w '%{http_code}' \
+            -X POST \
+            -H "X-Api-Token: $APP_API_TOKEN" \
+            --data-binary 'http://127.0.0.1:1/health' \
             http://127.0.0.1:18080/api/check)
           echo "API HTTP status: $code"
           cat /tmp/api-response.json
